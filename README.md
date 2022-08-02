@@ -1,0 +1,1 @@
+Resolução passo a passo de algumas máquinas do [Hack The Box](https://app.hackthebox.com/home).

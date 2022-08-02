@@ -84,8 +84,7 @@ Testando mais um payload:
 
 Esse é realmente um comportamento esperado para o **Jinja2**!
 
-![Fonte: [https://portswigger.net/research/server-side-template-injection](https://portswigger.net/research/server-side-template-injection)](https://portswigger.net/cms/images/migration/blog/screen-shot-2015-07-20-at-09-21-56.png)
-
+![SSTI](images/ssti.png)
 Fonte: [https://portswigger.net/research/server-side-template-injection](https://portswigger.net/research/server-side-template-injection)
 
 Utilizando essa vulnerabilidade para ler arquivos da máquina:
