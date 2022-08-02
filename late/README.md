@@ -85,6 +85,7 @@ Testando mais um payload:
 Esse é realmente um comportamento esperado para o **Jinja2**!
 
 ![SSTI](images/ssti.png)
+
 Fonte: [https://portswigger.net/research/server-side-template-injection](https://portswigger.net/research/server-side-template-injection)
 
 Utilizando essa vulnerabilidade para ler arquivos da máquina:
@@ -140,7 +141,7 @@ smmsp:x:120:125:Mail Submission Program,,,:/var/lib/sendmail:/usr/sbin/nologin
 </p>
 ```
 
-Observe o usuário no qual destaquei a linha, provavelmente é ele que está rodando a aplicação. Vemos que ele esqueceu a chave privada para acessar o **ssh** na pasta **.ssh**:
+Observe o usuário svc_acc, provavelmente é ele que está rodando a aplicação. Vemos que ele esqueceu a chave privada para acessar o **ssh** na pasta **.ssh**:
 
 ![ssh.png](images/ssh.png)
 
